@@ -52,7 +52,15 @@
         },
 
         onScopeChange: function(scope) {
-            this._loadModels();
+            Rally.data.ModelFactory.getModels({
+                types: ['User Story', 'Defect', 'Defect Suite', 'Test Set'],
+                context: this.getContext().getDataContext(),
+                success: function(models) {
+                    var compositeModel = Rally.domain.WsapiModelBuilder.buildCompositeArtifact(_.values(models), this.getContext());
+                    this._addGridBoard(compositeModel);
+                },
+                scope: this
+            });
         },
 
         getSettingsFields: function () {
@@ -69,7 +77,7 @@
             return fields;
         },
 
-        _addGridBoard: function(compositeModel, treeGridModel) {
+        _addGridBoard: function(compositeModel) {
             var plugins = ['rallygridboardaddnew'],
                 context = this.getContext();
 
@@ -143,7 +151,7 @@
                     'Children'
                 ],
                 alwaysSelectedValues: alwaysSelectedValues,
-                modelNames: this._getFieldPickerDisplayNames(context, treeGridModel),
+                modelNames: this._getModelNames(compositeModel),
                 boardFieldDefaults: (this.getSetting('cardFields') && this.getSetting('cardFields').split(',')) ||
                     ['Parent', 'Tasks', 'Defects', 'Discussion', 'PlanEstimate']
             });
@@ -161,10 +169,10 @@
             }
 
             this.gridBoardPlugins = plugins;
-            this._addGrid(this._getGridConfig(treeGridModel), this._getGridBoardModelNames(context, compositeModel));
+            this._addGrid(compositeModel);
         },
 
-        _addGrid: function(gridConfig, modelNames){
+        _addGrid: function(compositeModel){
             var context = this.getContext();
 
             this.remove('gridBoard');
@@ -175,7 +183,7 @@
                 stateId: 'iterationtracking-gridboard',
                 context: context,
                 plugins: this.gridBoardPlugins,
-                modelNames: modelNames,
+                modelNames: this._getModelNames(compositeModel),
                 cardBoardConfig: {
                     serverSideFiltering: context.isFeatureEnabled('BETA_TRACKING_EXPERIENCE'),
                     plugins: [
@@ -198,7 +206,7 @@
                         filtercomplete: this._onBoardFilterComplete
                     }
                 },
-                gridConfig: gridConfig,
+                gridConfig: this._getGridConfig(compositeModel),
                 addNewPluginConfig: {
                     style: {
                         'float': 'left'
@@ -249,7 +257,7 @@
             };
         },
 
-        _getGridConfig: function(treeGridModel, columns) {
+        _getGridConfig: function(compositeModel, columns) {
             var context = this.getContext(),
                 stateString = 'iteration-tracking-treegrid',
                 stateId = context.getScopedStateId(stateString),
@@ -274,8 +282,7 @@
 
             Ext.apply(gridConfig, {
                 xtype: 'rallytreegrid',
-                model: treeGridModel,
-                parentTypes: ['hierarchicalrequirement', 'defect', 'defectsuite', 'testset'],
+                model: ['User Story', 'Defect', 'Defect Suite', 'Test Set'],
                 enableHierarchy: true,
                 filters: [this.context.getTimeboxScope().getQueryFilter()],
                 treeColumnRenderer: function(value, metaData, record, rowIdx, colIdx, store, view) {
@@ -333,38 +340,8 @@
             return result;
         },
 
-        _loadModels: function() {
-            var topLevelModelNames = ['User Story', 'Defect', 'Defect Suite', 'Test Set'],
-                childModelNames = ['Task', 'Test Case'],
-                allModelNames = topLevelModelNames.concat(childModelNames);
-
-            Rally.data.ModelFactory.getModels({
-                types: allModelNames,
-                context: this.getContext().getDataContext(),
-                success: function(models) {
-                    this._onModelLoad(models, topLevelModelNames);
-                },
-                scope: this
-            });
-        },
-
-        _getFieldPickerDisplayNames: function(context, treeGridModel) {
-            var models = treeGridModel.getArtifactComponentModels();
-            return _.pluck(models, 'displayName');
-        },
-
-        _getGridBoardModelNames: function(context, compositeModel) {
+        _getModelNames: function(compositeModel) {
             return _.pluck(compositeModel.getArtifactComponentModels(), 'displayName');
-        },
-
-        _onModelLoad: function(models, topLevelModelNames) {
-            var availableTopLevelModels = _.filter(models, function(model, modelName) {
-                    return _.contains(topLevelModelNames, modelName);
-                }),
-                compositeModel = Rally.domain.WsapiModelBuilder.buildCompositeArtifact(availableTopLevelModels, this.getContext()),
-                treeGridModel = Rally.domain.WsapiModelBuilder.buildCompositeArtifact(_.values(models), this.getContext());
-
-            this._addGridBoard(compositeModel, treeGridModel);
         },
 
         _onLoad: function() {
